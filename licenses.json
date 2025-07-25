@@ -1,8 +1,8 @@
 {
-  "ABC12345": {
+  "ABC123": {
     "devices": []
   },
-  "XYZ67890": {
-    "devices": []
+  "DEF456": {
+    "devices": ["device_001"]
   }
 }
