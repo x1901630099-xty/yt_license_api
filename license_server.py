@@ -1,59 +1,63 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 import json
-import os
+import uuid
 
 app = Flask(__name__)
-DATA_FILE = 'licenses.json'
+LICENSE_FILE = "licenses.json"
 
 def load_licenses():
-    if not os.path.exists(DATA_FILE):
+    try:
+        with open(LICENSE_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
         return {}
-    with open(DATA_FILE, 'r') as f:
-        return json.load(f)
 
-def save_licenses(data):
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+def save_licenses(licenses):
+    with open(LICENSE_FILE, "w") as f:
+        json.dump(licenses, f, indent=4)
 
-@app.route('/activate', methods=['POST'])
-def activate():
-    req_data = request.get_json()
-    code = req_data.get('code')
-    device = req_data.get('device')
+@app.route("/")
+def home():
+    return jsonify({"message": "Welcome to the license API"})
 
-    if not code or not device:
-        return jsonify({'status': 'error', 'message': 'Missing code or device'}), 400
+@app.route("/check/<license_key>")
+def check_license(license_key):
+    licenses = load_licenses()
+    license_data = licenses.get(license_key)
 
-    data = load_licenses()
+    if not license_data:
+        return jsonify({"exists": False}), 200
 
-    if code not in data:
-        return jsonify({'status': 'error', 'message': 'Invalid activation code'}), 403
+    return jsonify({
+        "exists": True,
+        "bind_count": len(license_data["devices"]),
+        "max_binds": license_data["max_devices"]
+    })
 
-    if device in data[code]['devices']:
-        return jsonify({'status': 'success', 'message': 'Device already activated'})
+@app.route("/activate/<license_key>")
+def activate_license(license_key):
+    from flask import request
 
-    if len(data[code]['devices']) >= 3:
-        return jsonify({'status': 'error', 'message': 'Activation limit reached'}), 403
+    device_id = request.args.get("device_id")
+    if not device_id:
+        return jsonify({"success": False, "error": "Missing device_id"}), 400
 
-    data[code]['devices'].append(device)
-    save_licenses(data)
+    licenses = load_licenses()
+    license_data = licenses.get(license_key)
 
-    return jsonify({'status': 'success', 'message': 'Activation successful'})
+    if not license_data:
+        return jsonify({"success": False, "error": "License not found"}), 404
 
-@app.route('/check/<code>', methods=['GET'])
-def check(code):
-    data = load_licenses()
-    if code not in data:
-        return jsonify({'exists': False})
-    return jsonify({'exists': True, 'devices': data[code]['devices']})
+    if device_id in license_data["devices"]:
+        return jsonify({"success": True, "message": "Already activated"}), 200
 
-@app.route('/check_license', methods=['GET'])
-def check_license_query():
-    license_key = request.args.get('license')
-    data = load_licenses()
-    if not license_key or license_key not in data:
-        return jsonify({'exists': False})
-    return jsonify({'exists': True, 'devices': data[license_key]['devices']})
+    if len(license_data["devices"]) >= license_data["max_devices"]:
+        return jsonify({"success": False, "error": "Activation limit reached"}), 403
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    license_data["devices"].append(device_id)
+    save_licenses(licenses)
+
+    return jsonify({"success": True, "message": "Activation successful"}), 200
+
+if __name__ == "__main__":
+    app.run(debug=True)
