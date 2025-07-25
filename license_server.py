@@ -47,5 +47,13 @@ def check(code):
         return jsonify({'exists': False})
     return jsonify({'exists': True, 'devices': data[code]['devices']})
 
+@app.route('/check_license', methods=['GET'])
+def check_license_query():
+    license_key = request.args.get('license')
+    data = load_licenses()
+    if not license_key or license_key not in data:
+        return jsonify({'exists': False})
+    return jsonify({'exists': True, 'devices': data[license_key]['devices']})
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
